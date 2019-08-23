@@ -118,6 +118,7 @@ public final class ImagePickerSheetController: UIViewController {
     fileprivate lazy var requestOptions: PHImageRequestOptions = {
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
         options.resizeMode = .fast
         
         return options
@@ -252,6 +253,7 @@ public final class ImagePickerSheetController: UIViewController {
         let requestOptions = PHImageRequestOptions()
         requestOptions.isSynchronous = true
         requestOptions.deliveryMode = .fastFormat
+        requestOptions.isNetworkAccessAllowed = true
         
         result.enumerateObjects(options: [], using: { asset, index, stop in
             if index == fetchLimit {
@@ -263,9 +265,8 @@ public final class ImagePickerSheetController: UIViewController {
     }
     
     fileprivate func requestImageForAsset(_ asset: PHAsset, completion: @escaping (_ image: UIImage?) -> ()) {
-        let targetSize = sizeForAsset(asset, scale: UIScreen.main.scale)
+        let targetSize = sizeForAsset(asset, scale: min(2, UIScreen.main.scale))
         requestOptions.isSynchronous = true
-        requestOptions.deliveryMode = .fastFormat
         
         // Workaround because PHImageManager.requestImageForAsset doesn't work for burst images
         if asset.representsBurst {
@@ -309,7 +310,13 @@ public final class ImagePickerSheetController: UIViewController {
         reloadCurrentPreviewHeight(invalidateLayout: true)
         
         let sheetHeight = sheetController.preferredSheetHeight
-        let sheetSize = CGSize(width: view.bounds.width, height: sheetHeight)
+        let inset: UIEdgeInsets
+        if #available(iOS 11.0, *) {
+          inset = view.safeAreaInsets
+        } else {
+          inset = .zero
+        }
+        let sheetSize = CGSize(width: view.bounds.width - (inset.left + inset.right), height: sheetHeight)
 
         let additionalPadding: CGFloat
         if #available(iOS 11, *) {
@@ -321,7 +328,7 @@ public final class ImagePickerSheetController: UIViewController {
         // This particular order is necessary so that the sheet is layed out
         // correctly with and without an enclosing popover
         preferredContentSize = sheetSize
-        sheetCollectionView.frame = CGRect(origin: CGPoint(x: view.bounds.minX, y: view.bounds.maxY - view.frame.origin.y - sheetHeight - additionalPadding), size: sheetSize)
+        sheetCollectionView.frame = CGRect(origin: CGPoint(x: view.bounds.minX + inset.left, y: view.bounds.maxY - view.frame.origin.y - sheetHeight - additionalPadding), size: sheetSize)
     }
     
     fileprivate func reloadCurrentPreviewHeight(invalidateLayout invalidate: Bool) {
@@ -339,35 +346,7 @@ public final class ImagePickerSheetController: UIViewController {
     }
     
     fileprivate func reloadMaximumPreviewHeight() {
-        let maxHeight: CGFloat = 400
-        let maxImageWidth = (view.bounds.width - ((2 * sheetInset) + (2 * previewInset))) * 0.75
-
-        guard let fetchedResults = fetchedResults else {
-          return
-        }
-
-        let results: [PHAsset] = (0..<fetchedResults.count).map { fetchedResults[$0] }
-
-        let assetRatios = results
-          .map { CGSize(width: max($0.pixelHeight, $0.pixelWidth), height: min($0.pixelHeight, $0.pixelWidth))}
-          .map { $0.height / $0.width }
-        
-        let assetHeights = assetRatios
-            .map { $0 * maxImageWidth }
-            .filter { $0 < maxImageWidth && $0 < maxHeight } // Make sure the preview isn't too high eg for squares
-            .sorted(by: >)
-
-        let assetHeight: CGFloat
-        if let first = assetHeights.first {
-            assetHeight = first
-        }
-        else {
-            assetHeight = 0
-        }
-        
-        // Just a sanity check, to make sure this doesn't exceed 400 points
-        let scaledHeight: CGFloat = min(assetHeight, maxHeight)
-        maximumPreviewHeight = scaledHeight + 2 * previewInset
+        maximumPreviewHeight = 200
     }
     
     // MARK: -
